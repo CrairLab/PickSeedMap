@@ -107,8 +107,21 @@ corrM_conv = conv2(corrM,filter,'same');
 
 %Find the maximum point
 max_point = max(corrM_conv(:));
-[y2 ,x2] = find(corrM_conv == max_point);
-fill([x2-2,x2-2,x2+2,x2+2],[y2-2,y2+2,y2+2,y2-2], 'm')
+
+if max_point > 0
+    [y2 ,x2] = find(corrM_conv == max_point);
+else
+    warning('Maximum correlation in the region is less then 0!')
+    warning('Try to find minimum point instead!')
+    min_point = min(corrM_conv(:));
+    [y2 ,x2] = find(corrM_conv == min_point);
+end
+
+try
+    fill([x2-2,x2-2,x2+2,x2+2],[y2-2,y2+2,y2+2,y2-2], 'm')
+catch
+    msgbox('Detect more than one maximums/minimums!','Error')
+end
 
 function avg_corr = calculateSurrounding(curPos, corrM)
     x = curPos(1);
@@ -317,7 +330,7 @@ try
     
     %Plot the first map
     corrM = corrMatrix(:,:,1);
-    plotCorrelationMap(corrM, handles)
+    plotCorrelationMap(corrM, handles);
 
 catch
     msgbox('Can not load correlation maps!','Error!')
