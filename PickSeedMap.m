@@ -22,7 +22,7 @@ function varargout = PickSeedMap(varargin)
 
 % Edit the above text to modify the response to help PickSeedMap
 
-% Last Modified by GUIDE v2.5 11-Dec-2019 23:10:51
+% Last Modified by GUIDE v2.5 26-Dec-2019 15:14:30
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -58,9 +58,9 @@ handles.output = hObject;
 guidata(hObject, handles);
 
 %Initiate Save_data.UserData
-handles.Save_data.UserData.avg_rec_corr = [];
+%handles.Save_data.UserData.avg_rec_corr = [];
 handles.Save_data.UserData.avg_hand_corr = [];
-handles.Save_data.UserData.rec_Position = [];
+handles.Save_data.UserData.save_strct = [];
 handles.Save_data.UserData.hand_Position = [];
 
 
@@ -80,7 +80,7 @@ function corrM = plotCorrelationMap(corrM, handles)
     caxis([-0.2, 1]); title(['roi:', num2str(curPos)]);
     
     %Save current map
-    handles.CorrMap.UserData.currMap = corrM;
+    handles.CorrMap.UserData.curMap = corrM;
    
     %Allow roi selection
     set(im, 'ButtonDownFcn', {@markEvents, handles});
@@ -117,6 +117,24 @@ else
     [y2 ,x2] = find(corrM_conv == min_point);
 end
 
+
+function save_strct = Get_stat(corrM)
+%Get statistcs of the input correlation matrix
+corrM(corrM == 0) = nan;
+
+%Get statistics
+avg_corr = nanmean(corrM(:)); %get the averaged correlation
+median_corr = nanmedian(corrM(:)); %get the median correlation
+[y2 ,x2] = findReccomandMax(corrM); %find the point with max correlation
+max_corr = corrM(y2,x2); %Get the max correlation
+
+%Save statistics
+save_strct.avg_corr = avg_corr;
+save_strct.median_corr = median_corr;
+save_strct.max_position = [x2, y2];
+save_strct.max_corr = max_corr;
+save_strct.corrM = corrM;
+
 try
     fill([x2-2,x2-2,x2+2,x2+2],[y2-2,y2+2,y2+2,y2-2], 'm')
 catch
@@ -137,7 +155,7 @@ function markEvents(h,~,handles)
 %handles  handles of the GUI
 roi = drawpoint(h.Parent, 'Color', 'g'); %Drawing a new roi
 curPos = round(roi.Position);  %Current xy coordinates
-corrM = handles.CorrMap.UserData.currMap;
+corrM = handles.CorrMap.UserData.curMap;
 avg_hand_corr = calculateSurrounding(curPos, corrM);
 handles.edit_hand.String = num2str(avg_hand_corr);
 handles.Save_data.UserData.avg_hand_corr = avg_hand_corr;
@@ -152,7 +170,7 @@ function movedCallback(roi,~,handles)
 %roi     the Point obj
 %handles     handles of the GUI
 curPos = round(roi.Position);  %Current xy coordinates
-corrM = handles.CorrMap.UserData.currMap;
+corrM = handles.CorrMap.UserData.curMap;
 avg_hand_corr = calculateSurrounding(curPos, corrM);
 handles.edit_hand.String = num2str(avg_hand_corr);
 handles.Save_data.UserData.avg_hand_corr = avg_hand_corr;
@@ -250,15 +268,17 @@ try
     curPos = handles.Load_maps.UserData.curPos;
     saveas(handles.CorrMap, ['roi_', reg_flag, '_',...
         num2str(curPos(1)) '_',  num2str(curPos(2)),'.png'])  
-    avg_seed_corr = handles.Save_data.UserData.avg_seed_corr;
-    avg_rec_corr = handles.Save_data.UserData.avg_rec_corr;
-    avg_hand_corr = handles.Save_data.UserData.avg_hand_corr;
-    rec_Position = handles.Save_data.UserData.rec_Position;
-    hand_Position = handles.Save_data.UserData.hand_Position;
-    save(['roi_', num2str(reg_flag), '_',...
-        num2str(curPos(1)) '_',  num2str(curPos(2)),'.mat'],...
-        'avg_seed_corr', 'avg_rec_corr', 'avg_hand_corr', 'curPos',...
-        'rec_Position', 'hand_Position');
+    %avg_seed_corr = handles.Save_data.UserData.avg_seed_corr;
+    %avg_rec_corr = handles.Save_data.UserData.avg_rec_corr;
+    %avg_hand_corr = handles.Save_data.UserData.avg_hand_corr;
+    %hand_Position = handles.Save_data.UserData.hand_Position;
+    save_strct = handles.Save_data.UserData.save_strct;
+    %save(['roi_', num2str(reg_flag), '_',...
+        %num2str(curPos(1)) '_',  num2str(curPos(2)),'.mat'],...
+        %'avg_seed_corr', 'avg_rec_corr', 'avg_hand_corr', 'curPos',...
+        %'save_strct', 'hand_Position');       
+    save(['roi_', num2str(reg_flag), '_', ...
+        num2str(curPos(1)) '_',  num2str(curPos(2)),'.mat'], 'save_strct');
 catch
     warning('Variables not defined!')
 end
@@ -272,27 +292,36 @@ function Draw_region_Callback(hObject, eventdata, handles)
 handles.Status.Visible = 'On';
 handles.Status.String = 'Pls draw a region!';
 BW = roipoly;
-corrM = handles.CorrMap.UserData.currMap;
+handles.Draw_region.UserData.BW = BW;
+handles.Save_data.UserData.save_strct.BW = BW;
+corrM = handles.CorrMap.UserData.curMap;
 corrM_masked = corrM .* BW;
 handles.Draw_region.UserData.corrM_masked = corrM_masked;
 handles.Status.String = 'ROI defined!';
 
 
-% --- Executes on button press in Find_max.
-function Find_max_Callback(hObject, eventdata, handles)
-% hObject    handle to Find_max (see GCBO)
+% --- Executes on button press in Get_statistics.
+function Get_statistics_Callback(hObject, eventdata, handles)
+% hObject    handle to Get_statistics (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 try
-    corrM_masked = handles.Draw_region.UserData.corrM_masked;
+    %corrM_masked = handles.Draw_region.UserData.corrM_masked;
+    %Calculate the masked corrM
+    BW = handles.Draw_region.UserData.BW;
+    curMap = handles.CorrMap.UserData.curMap;     
+    corrM_masked = curMap .* BW;
+    handles.Draw_region.UserData.corrM_masked = corrM_masked;
+    
     %Find the point that shows maximum correlation in a defined roi region
-    [y2 ,x2] = findReccomandMax(corrM_masked);
-    avg_rec_corr = calculateSurrounding([x2 y2], corrM_masked);
-    handles.edit_rec.String = num2str(avg_rec_corr);
-    handles.Save_data.UserData.avg_rec_corr = avg_rec_corr;
-    handles.Save_data.UserData.rec_Position = [x2, y2];
+    save_strct = Get_stat(corrM_masked);
+    %avg_rec_corr = save_strct.avg_corr;
+    max_corr = save_strct.max_corr;
+    handles.edit_rec.String = num2str(max_corr);
+    %handles.Save_data.UserData.avg_rec_corr = avg_rec_corr;
+    handles.Save_data.UserData.save_strct = save_strct;
     handles.Status.Visible = 'On';
-    handles.Status.String = 'Maximum found!';
+    handles.Status.String = 'Statistics calculated!';
 catch
     msgbox('Please define a roi region first!', 'Error');
 end
@@ -392,5 +421,3 @@ function Map_slider_CreateFcn(hObject, eventdata, handles)
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
-
-
