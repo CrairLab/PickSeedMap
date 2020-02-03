@@ -74,6 +74,9 @@ function corrM = plotCorrelationMap(corrM, handles)
     curPos = [x, y];    
     handles.Load_maps.UserData.curPos = curPos;
     
+    %Specify current axis
+    set(handles.figure1,'CurrentAxes',handles.CorrMap)
+    
     %Plot the correlation map
     hold off;
     im = imagesc(handles.CorrMap, corrM); colormap jet; colorbar; axis image
