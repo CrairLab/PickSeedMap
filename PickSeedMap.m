@@ -22,7 +22,7 @@ function varargout = PickSeedMap(varargin)
 
 % Edit the above text to modify the response to help PickSeedMap
 
-% Last Modified by GUIDE v2.5 26-Dec-2019 15:14:30
+% Last Modified by GUIDE v2.5 13-Feb-2020 14:47:38
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -423,4 +423,84 @@ function Map_slider_CreateFcn(hObject, eventdata, handles)
 % Hint: slider controls usually have a light gray background.
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+
+% --- Executes on button press in Regionprops.
+function Regionprops_Callback(hObject, eventdata, handles)
+% hObject    handle to Regionprops (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+try
+    %corrM_masked = handles.Draw_region.UserData.corrM_masked;
+    %Calculate the masked corrM
+    BW = handles.Draw_region.UserData.BW;
+    curMap = handles.CorrMap.UserData.curMap;     
+    corrM_masked = curMap .* BW;
+    handles.Draw_region.UserData.corrM_masked = corrM_masked;
+    
+    %Get the threshold
+    threshold = str2double(handles.Regionprops_threshold.String);
+    if isnan(threshold)
+        warning('Input error! Please type in a number!')
+        disp('Defulat threshold = 0.95!')
+        threshold = 0.95;
+    end
+    
+    %Area of the roi
+    RegionArea = sum(BW(:));
+    
+    %Find the point that shows maximum correlation in a defined roi region
+    HighCorrRegion = corrM_masked > threshold;
+    figure; imshow(HighCorrRegion);
+    stats = regionprops(HighCorrRegion, 'Area', 'Eccentricity', 'FilledArea',...
+        'MajorAxisLength', 'MinorAxisLength', 'Orientation');
+    AllArea = []; AllArea = [AllArea; stats.FilledArea];
+    LargestRegion = AllArea == max(AllArea);
+    LargestStats = stats(LargestRegion);
+    
+    %Normalized by the area of the roi
+    LargestStats.NormalizedArea = LargestStats.Area./RegionArea;
+    LargestStats.NormalizedFilledArea = LargestStats.FilledArea./RegionArea;
+    LargestStats.NormalizedMajorAxisLength = LargestStats.MajorAxisLength./RegionArea;
+    LargestStats.NormalizedMinorAxisLength = LargestStats.MinorAxisLength./RegionArea;
+    LargestStats.roiArea = RegionArea;
+    
+    %handles.Save_data.UserData.avg_rec_corr = avg_rec_corr;
+    handles.Regionprops.UserData.LargestStats = LargestStats;
+    handles.Status.Visible = 'On';
+    handles.Status.String = 'Regionprops calculated!';
+    
+    %Save the regionprops result
+    filename = handles.Load_maps.UserData.filename;
+    reg_flag = filename(20:21);
+    curPos = handles.Load_maps.UserData.curPos;
+    uisave({'LargestStats'},['Regionprops_', num2str(reg_flag), '_', ...
+        num2str(curPos(1)) '_',  num2str(curPos(2)),'.mat']);
+    handles.Status.String = 'Regionprops saved!';
+    disp(['Normalized filled area = ' num2str(LargestStats.NormalizedFilledArea)])
+catch
+    msgbox('Please define a roi region first!', 'Error');
+end
+
+
+function Regionprops_threshold_Callback(hObject, eventdata, handles)
+% hObject    handle to Regionprops_threshold (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of Regionprops_threshold as text
+%        str2double(get(hObject,'String')) returns contents of Regionprops_threshold as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function Regionprops_threshold_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Regionprops_threshold (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
 end
