@@ -22,7 +22,7 @@ function varargout = PickSeedMap(varargin)
 
 % Edit the above text to modify the response to help PickSeedMap
 
-% Last Modified by GUIDE v2.5 13-Feb-2020 14:47:38
+% Last Modified by GUIDE v2.5 14-Feb-2020 22:13:56
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -64,8 +64,55 @@ handles.Save_data.UserData.save_strct = [];
 handles.Save_data.UserData.hand_Position = [];
 
 
+if ~isempty(findobj('Tag', 'Manuvent_threshold'))
+    MC_h = findobj('Tag', 'Manuvent_threshold');
+    MC_data = guidata(MC_h);
+    MC_passed = get(MC_data.Plot_correlation, 'UserData');
+    plotCorrObj = MC_passed.plotCorrObj;
+
+    %Get the current postition for the seed
+    curPos = plotCorrObj.curPos;
+    
+    %Save the filename
+    handles.Load_maps.UserData.filename = plotCorrObj.filename;
+
+    clear MC_data MC_passed;
+
+    %Plot the correlation map related to the seed
+    corrM = CalculateCorrelationMap(plotCorrObj, handles);
+    %handles.Status.Visible = 'On';  handles.Status.String = 'Finished!';
+
+    %Calculate the averaged correlation near the seed
+    avg_seed_corr = calculateSurrounding(curPos, corrM);
+    handles.edit_seed.String = num2str(avg_seed_corr);
+    handles.Save_data.UserData.avg_seed_corr = avg_seed_corr;
+
+    %Initiate Save_data.UserData
+    handles.Save_data.UserData.save_strct = [];
+    handles.Save_data.UserData.avg_rec_corr = [];
+    handles.Save_data.UserData.hand_Position = [];
+    %handles.Save_data.UserData.avg_hand_corr = [];
+    %handles.Save_data.UserData.rec_Position = [];
+
+    %Save the correlation matrix
+    handles.Load_maps.UserData.corrMatrix = corrM;
+    handles.output.UserData.plotCorrObj = plotCorrObj;
+
+    %Set default percentile value
+    handles.Corr_percentile.UserData.curValue = 0.997;
+    handles.Corr_percentile.String = num2str(0.997);
+    disp('Default percentile for highly correlated region = 99.7%.')
+
+    %Set the status text
+    handles.Status.Visible = 'On';
+    handles.Status.String = plotCorrObj.filename;
+else
+    disp('Did not load plotCorrObj from the Manuvent_threhold GUI!')
+end
+
+
 % UIWAIT makes PickSeedMap wait for user response (see UIRESUME)
-% uiwait(handles.figure1);
+% uiwait(handles.PickSeedMap);
 
 
 function corrM = plotCorrelationMap(corrM, handles)
@@ -75,7 +122,7 @@ function corrM = plotCorrelationMap(corrM, handles)
     handles.Load_maps.UserData.curPos = curPos;
     
     %Specify current axis
-    set(handles.figure1,'CurrentAxes',handles.CorrMap)
+    set(handles.PickSeedMap,'CurrentAxes',handles.CorrMap)
     
     %Plot the correlation map
     hold off;
@@ -99,6 +146,42 @@ function corrM = plotCorrelationMap(corrM, handles)
     handles.edit_seed.String = num2str(avg_seed_corr);
     handles.Save_data.UserData.avg_seed_corr = avg_seed_corr;
 
+    
+function corrM = CalculateCorrelationMap(plotCorrObj, handles)
+% Plot the correlation map w.r.t the current seed
+    A = plotCorrObj.curMovie;
+    curPos = plotCorrObj.curPos;
+    reg_flag = plotCorrObj.reg_flag;
+    
+    if reg_flag
+        disp('Regress out the background!')
+    else
+        disp('Plot original correlation!')
+    end
+    
+    %Get the fluorescent trace of the current roi
+    seedTrace = A(curPos(2), curPos(1), :);
+    seedTrace = seedTrace(:);
+    sz  = size(A);
+    imgall = reshape(A, sz(1)*sz(2), sz(3));
+    
+    %Calculate correlation matrix
+    if ~reg_flag
+        corrM = corr(imgall',seedTrace);
+    else
+        std_all = nanstd(imgall,0,2);
+        lowPixels = std_all <= prctile(std_all,1);
+        %avg_trace = nanmean(imgall,1);
+        avg_trace = nanmean(imgall(lowPixels,:),1);
+        corrM = partialcorr(imgall',seedTrace, avg_trace');
+    end
+    corrM = reshape(corrM, sz(1:2));
+    
+    %Plot the new correlation matrix
+    corrM = plotCorrelationMap(corrM, handles);
+
+    
+    
     
 function [y2 ,x2] = findReccomandMax(corrM)
 %Find the point that shows maximum correlation other than the seed given
@@ -363,6 +446,12 @@ try
     %Plot the first map
     corrM = corrMatrix(:,:,1);
     plotCorrelationMap(corrM, handles);
+    
+    %Clean old variables
+    handles.output.UserData = [];
+    handles.Save_data.UserData.save_strct = [];
+    handles.Save_data.UserData.avg_rec_corr = [];
+    handles.Save_data.UserData.hand_Position = [];
 
 catch
     msgbox('Can not load correlation maps!','Error!')
@@ -407,12 +496,15 @@ function Map_slider_Callback(hObject, eventdata, handles)
 % Hints: get(hObject,'Value') returns position of slider
 %        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
 
-corrMatrix = handles.Load_maps.UserData.corrMatrix;
-curIdx = round(get(hObject, 'Value'));
-corrM = corrMatrix(:,:,curIdx);
-plotCorrelationMap(corrM, handles);
-set(handles.Frame, 'String', num2str(curIdx));
-
+try
+    corrMatrix = handles.Load_maps.UserData.corrMatrix;
+    curIdx = round(get(hObject, 'Value'));
+    corrM = corrMatrix(:,:,curIdx);
+    plotCorrelationMap(corrM, handles);
+    set(handles.Frame, 'String', num2str(curIdx));
+catch
+    msgbox('Wrong calling the slider callback, no corrMatrix loaded!', 'Error')
+end
 
 % --- Executes during object creation, after setting all properties.
 function Map_slider_CreateFcn(hObject, eventdata, handles)
@@ -473,7 +565,13 @@ try
     
     %Save the regionprops result
     filename = handles.Load_maps.UserData.filename;
-    reg_flag = filename(20:21);
+    if isfield(handles.output.UserData,'plotCorrObj')
+        plotCorrObj = handles.output.UserData.plotCorrObj;
+        reg_flag = plotCorrObj.reg_flag;
+        disp('Loaded reg_flag!')
+    else
+        reg_flag = filename(20:21);
+    end
     curPos = handles.Load_maps.UserData.curPos;
     uisave({'LargestStats'},['Regionprops_', num2str(reg_flag), '_', ...
         num2str(curPos(1)) '_',  num2str(curPos(2)),'.mat']);
@@ -503,4 +601,188 @@ function Regionprops_threshold_CreateFcn(hObject, eventdata, handles)
 %       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in Corr_region.
+function Corr_region_Callback(hObject, eventdata, handles)
+% hObject    handle to Corr_region (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+try
+    %Renew the map 
+    plotCorrObj = handles.output.UserData.plotCorrObj;
+    reg_flag = plotCorrObj.reg_flag;
+    CalculateCorrelationMap(plotCorrObj, handles);
+    
+    %Get the current threshold
+    try
+        %Get and calculate the percentile
+        curThreshold = str2double(get(handles.Corr_threshold, 'String'));
+        handles.Corr_threshold.UserData.curValue = curThreshold;
+        disp(['Plot region with correlation > ' num2str(curThreshold*100) '%'])
+    catch
+        msgbox('Please input a number btw 0-1!', 'Error!')
+    end
+    
+    %Plot the highly correlated region
+    curThreshold = handles.Corr_threshold.UserData.curValue;
+    corrM = handles.Load_maps.UserData.corrMatrix;
+    [x,y] = find(corrM>=curThreshold);
+    Correlated_region.x = x;
+    Correlated_region.y = y;
+    hObject.UserData.Correlated_region = Correlated_region;
+    plot(handles.CorrMap, y,x,'w*')  
+catch
+    msgbox('Can not get the correlated region!', 'Error!')
+    return
+end
+
+
+
+function Corr_threshold_Callback(hObject, eventdata, handles)
+% hObject    handle to Corr_threshold (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of Corr_threshold as text
+%        str2double(get(hObject,'String')) returns contents of Corr_threshold as a double
+try
+    %Get and calculate the percentile
+    curThreshold = str2double(get(hObject, 'String'));
+    handles.Corr_threshold.UserData.curValue = curThreshold;
+    disp(['Plot region with correlation > ' num2str(curThreshold*100) '%'])
+catch
+    msgbox('Please input a number btw 0-1!', 'Error!')
+end
+
+
+
+% --- Executes during object creation, after setting all properties.
+function Corr_threshold_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to Corr_threshold (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in Plot_avg.
+function Plot_avg_Callback(hObject, eventdata, handles)
+% hObject    handle to Plot_avg (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+try
+    %Get required data
+    curThreshold = handles.Corr_threshold.UserData.curValue;
+    corrM = handles.Load_maps.UserData.corrMatrix;
+    plotCorrObj = handles.output.UserData.plotCorrObj;
+    curMovie = plotCorrObj.curMovie;
+    
+    %Reshape matrices
+    sz = size(corrM);
+    corrM = reshape(corrM, [sz(1)*sz(2),1]);
+    curMovie = reshape(curMovie, [sz(1)*sz(2), size(curMovie,3)]);
+    
+    %Calculate the averaged trace
+    Avg_trace = nanmean(curMovie(corrM>=curThreshold,:),1);
+    hObject.UserData.Avg_trace = Avg_trace;
+    
+    %Plot the trace
+    plot(handles.Trace, Avg_trace, 'LineWidth', 2);
+    handles.Trace.XLim = [1, length(Avg_trace)];
+    max_time = find(Avg_trace == max(Avg_trace));
+    hold(handles.Trace, 'on');
+    plot(handles.Trace, max_time, max(Avg_trace), 'r*')
+    plot(handles.Trace, 10:14, Avg_trace(10:14), 'g', 'LineWidth', 2)
+    Duration = length(Avg_trace);
+    plot(handles.Trace, 1:Duration, 0.02*ones(Duration,1), 'r')
+    
+    %Save the values to UserData
+    hObject.UserData.max_time = max_time;
+    hObject.UserData.max_value = max(Avg_trace);
+    
+catch
+    msgbox('Can not plot the averaged trace!', 'Error!')
+    return
+end
+
+% --- Executes on button press in Save_trace.
+function Save_trace_Callback(hObject, eventdata, handles)
+% hObject    handle to Save_trace (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+curThreshold = handles.Corr_threshold.UserData.curValue;
+Correlated_region = handles.Corr_region.UserData.Correlated_region;
+Avg_trace = handles.Plot_avg.UserData.Avg_trace;
+max_time = handles.Plot_avg.UserData.max_time;
+max_value = handles.Plot_avg.UserData.max_value;
+plotCorrObj = handles.output.UserData.plotCorrObj;
+filename = plotCorrObj.filename;
+
+%Locate specific tag
+t = strfind(filename,'AveragedMatrix');
+if ~isempty(t)
+    filename = filename(t+15:end);
+end
+
+savename = [filename '_averaged_trace_' num2str(curThreshold)];
+save([savename '.mat'], 'curThreshold', 'Correlated_region', 'Avg_trace', 'max_time', 'max_value')
+saveas(handles.Trace, [savename '.png'])  
+
+
+% --- Executes on button press in Clean_trace.
+function Clean_trace_Callback(hObject, eventdata, handles)
+% hObject    handle to Clean_trace (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+cla(handles.Trace)
+
+
+% --- Executes on button press in Regress_flag.
+function Regress_flag_Callback(hObject, eventdata, handles)
+% hObject    handle to Regress_flag (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of Regress_flag
+
+
+% --- Executes on button press in Plot_correlation.
+function Plot_correlation_Callback(hObject, eventdata, handles)
+% hObject    handle to Plot_correlation (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+try
+    handles.Status.Visible = 'On';
+    handles.Status.String = 'Select a pixel!';
+
+    %Define roi
+    set(handles.PickSeedMap,'CurrentAxes',handles.CorrMap)
+    roi = drawpoint('Color', 'm');
+
+    %Get roi position
+    curPos = round(roi.Position); 
+
+    %Update current roi position
+    handles.Load_maps.UserData.corrMatrix;
+    plotCorrObj = handles.output.UserData.plotCorrObj;
+    plotCorrObj.curPos = curPos;
+    
+    %Update whether do background regression
+    plotCorrObj.reg_flag = handles.Regress_flag.Value;
+    
+    %Plot the correlation map related to the seed
+    CalculateCorrelationMap(plotCorrObj, handles);
+catch
+    msgbox('Something wrong, check with plotCorrObj correctly loaded!', 'Error')
 end
