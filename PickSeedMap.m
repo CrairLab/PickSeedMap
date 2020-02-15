@@ -95,7 +95,7 @@ if ~isempty(findobj('Tag', 'Manuvent_threshold'))
     %handles.Save_data.UserData.rec_Position = [];
 
     %Save the correlation matrix
-    handles.Load_maps.UserData.corrMatrix = corrM;
+    %handles.Load_maps.UserData.corrMatrix = corrM;
     handles.output.UserData.plotCorrObj = plotCorrObj;
 
     %Set default percentile value
@@ -434,6 +434,10 @@ try
     hObject.UserData.filename = file;
     sz = size(corrMatrix);
     
+    %Update status
+    handles.Status.Visible = 'On';
+    handles.Status.String = file;
+    
     %Set edit text
     handles.Frame.String = '1';
     
@@ -467,12 +471,15 @@ function Frame_Callback(hObject, eventdata, handles)
 % Hints: get(hObject,'String') returns contents of Frame as text
 %        str2double(get(hObject,'String')) returns contents of Frame as a double
 
-curIdx = str2double(get(hObject, 'String'));
-corrMatrix = handles.Load_maps.UserData.corrMatrix;
-corrM = corrMatrix(:,:,curIdx);
-plotCorrelationMap(corrM, handles);
-set(handles.Map_slider, 'Value', curIdx);
-
+try
+    curIdx = str2double(get(hObject, 'String'));
+    corrMatrix = handles.Load_maps.UserData.corrMatrix;
+    corrM = corrMatrix(:,:,curIdx);
+    plotCorrelationMap(corrM, handles);
+    set(handles.Map_slider, 'Value', curIdx);
+catch
+    msgbox('Out of range. Can not jump to this map!', 'Error')
+end
 
 % --- Executes during object creation, after setting all properties.
 function Frame_CreateFcn(hObject, eventdata, handles)
@@ -552,11 +559,16 @@ try
     LargestStats = stats(LargestRegion);
     
     %Normalized by the area of the roi
-    LargestStats.NormalizedArea = LargestStats.Area./RegionArea;
-    LargestStats.NormalizedFilledArea = LargestStats.FilledArea./RegionArea;
-    LargestStats.NormalizedMajorAxisLength = LargestStats.MajorAxisLength./RegionArea;
-    LargestStats.NormalizedMinorAxisLength = LargestStats.MinorAxisLength./RegionArea;
-    LargestStats.roiArea = RegionArea;
+    if ~isempty(LargestStats)
+        LargestStats.NormalizedArea = LargestStats.Area./RegionArea;
+        LargestStats.NormalizedFilledArea = LargestStats.FilledArea./RegionArea;
+        LargestStats.NormalizedMajorAxisLength = LargestStats.MajorAxisLength./RegionArea;
+        LargestStats.NormalizedMinorAxisLength = LargestStats.MinorAxisLength./RegionArea;
+        LargestStats.roiArea = RegionArea;
+    else
+        msgbox('Threshold too high. No pixel is above it!')
+        return
+    end
     
     %handles.Save_data.UserData.avg_rec_corr = avg_rec_corr;
     handles.Regionprops.UserData.LargestStats = LargestStats;
@@ -565,6 +577,7 @@ try
     
     %Save the regionprops result
     filename = handles.Load_maps.UserData.filename;
+    %If the object was inherited from the Manuvent_threshold GUI
     if isfield(handles.output.UserData,'plotCorrObj')
         plotCorrObj = handles.output.UserData.plotCorrObj;
         reg_flag = plotCorrObj.reg_flag;
@@ -610,12 +623,7 @@ function Corr_region_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-try
-    %Renew the map 
-    plotCorrObj = handles.output.UserData.plotCorrObj;
-    reg_flag = plotCorrObj.reg_flag;
-    CalculateCorrelationMap(plotCorrObj, handles);
-    
+try  
     %Get the current threshold
     try
         %Get and calculate the percentile
@@ -626,9 +634,13 @@ try
         msgbox('Please input a number btw 0-1!', 'Error!')
     end
     
+    
+    
     %Plot the highly correlated region
     curThreshold = handles.Corr_threshold.UserData.curValue;
-    corrM = handles.Load_maps.UserData.corrMatrix;
+    corrM = handles.CorrMap.UserData.curMap;
+    %Renew correlation map first
+    plotCorrelationMap(corrM, handles);
     [x,y] = find(corrM>=curThreshold);
     Correlated_region.x = x;
     Correlated_region.y = y;
@@ -682,7 +694,7 @@ function Plot_avg_Callback(hObject, eventdata, handles)
 try
     %Get required data
     curThreshold = handles.Corr_threshold.UserData.curValue;
-    corrM = handles.Load_maps.UserData.corrMatrix;
+    corrM = handles.CorrMap.UserData.curMap;
     plotCorrObj = handles.output.UserData.plotCorrObj;
     curMovie = plotCorrObj.curMovie;
     
@@ -774,7 +786,6 @@ try
     curPos = round(roi.Position); 
 
     %Update current roi position
-    handles.Load_maps.UserData.corrMatrix;
     plotCorrObj = handles.output.UserData.plotCorrObj;
     plotCorrObj.curPos = curPos;
     
@@ -784,5 +795,5 @@ try
     %Plot the correlation map related to the seed
     CalculateCorrelationMap(plotCorrObj, handles);
 catch
-    msgbox('Something wrong, check with plotCorrObj correctly loaded!', 'Error')
+    msgbox('Something wrong, check if plotCorrObj correctly loaded!', 'Error')
 end
