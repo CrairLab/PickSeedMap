@@ -22,7 +22,7 @@ function varargout = PickSeedMap(varargin)
 
 % Edit the above text to modify the response to help PickSeedMap
 
-% Last Modified by GUIDE v2.5 14-Feb-2020 22:13:56
+% Last Modified by GUIDE v2.5 21-Feb-2020 17:39:41
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -194,15 +194,15 @@ corrM_conv = conv2(corrM,filter,'same');
 %Find the maximum point
 max_point = max(corrM_conv(:));
 
-if max_point > 0
-    [y2 ,x2] = find(corrM_conv == max_point);
-else
-    warning('Maximum correlation in the region is less then 0!')
-    warning('Try to find minimum point instead!')
-    min_point = min(corrM_conv(:));
-    [y2 ,x2] = find(corrM_conv == min_point);
+if max_point < 0
+    %[y2 ,x2] = find(corrM_conv == max_point);
+%else
+    disp('Maximum correlation in the region is less then 0!')
+    %warning('Try to find minimum point instead!')
+    %min_point = min(corrM_conv(:));
+    %[y2 ,x2] = find(corrM_conv == min_point);
 end
-
+[y2 ,x2] = find(corrM_conv == max_point);
 
 function save_strct = Get_stat(corrM)
 %Get statistcs of the input correlation matrix
@@ -798,3 +798,10 @@ try
 catch
     msgbox('Something wrong, check if plotCorrObj correctly loaded!', 'Error')
 end
+
+
+% --- Executes on button press in ShowOldMask.
+function ShowOldMask_Callback(hObject, eventdata, handles)
+% hObject    handle to ShowOldMask (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
