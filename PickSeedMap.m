@@ -635,8 +635,6 @@ try
         msgbox('Please input a number btw 0-1!', 'Error!')
     end
     
-    
-    
     %Plot the highly correlated region
     curThreshold = handles.Corr_threshold.UserData.curValue;
     corrM = handles.CorrMap.UserData.curMap;
@@ -647,6 +645,18 @@ try
     Correlated_region.y = y;
     hObject.UserData.Correlated_region = Correlated_region;
     plot(handles.CorrMap, y,x,'w*')  
+    
+    %Quantify pixels with corr>threhold in each hemishere
+    sz = size(corrM);
+    mid = round(sz(2)/2);
+    nLeft = sum(y<mid);
+    nRight = sum(y>mid);
+    ratio = nLeft/nRight;    
+    diff = abs(nLeft - nRight);
+    FOVsize = sum(~isnan(corrM(:)));
+    savename = ['LR_balance' '_' num2str(curThreshold) '_' ...
+        handles.Load_maps.UserData.filename];
+    save(savename,'nLeft','nRight','ratio','diff','FOVsize')
 catch
     msgbox('Can not get the correlated region!', 'Error!')
     return
