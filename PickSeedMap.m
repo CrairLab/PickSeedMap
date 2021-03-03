@@ -67,7 +67,7 @@ handles.Save_data.UserData.hand_Position = [];
 if ~isempty(findobj('Tag', 'Manuvent_threshold'))
     MC_h = findobj('Tag', 'Manuvent_threshold');
     MC_data = guidata(MC_h);
-    MC_passed = get(MC_data.Plot_correlation, 'UserData');
+    MC_passed = get(MC_data.output, 'UserData');
     plotCorrObj = MC_passed.plotCorrObj;
 
     %Get the current postition for the seed
@@ -83,9 +83,11 @@ if ~isempty(findobj('Tag', 'Manuvent_threshold'))
     %handles.Status.Visible = 'On';  handles.Status.String = 'Finished!';
 
     %Calculate the averaged correlation near the seed
-    avg_seed_corr = calculateSurrounding(curPos, corrM);
-    handles.edit_seed.String = num2str(avg_seed_corr);
-    handles.Save_data.UserData.avg_seed_corr = avg_seed_corr;
+    if ~isfield(plotCorrObj, 'curTrace')
+        avg_seed_corr = calculateSurrounding(curPos, corrM);
+        handles.edit_seed.String = num2str(avg_seed_corr);
+        handles.Save_data.UserData.avg_seed_corr = avg_seed_corr;
+    end
 
     %Initiate Save_data.UserData
     handles.Save_data.UserData.save_strct = [];
@@ -160,25 +162,34 @@ function corrM = CalculateCorrelationMap(plotCorrObj, handles)
     end
     
     %Get the fluorescent trace of the current roi
-    seedTrace = A(curPos(2), curPos(1), :);
-    seedTrace = seedTrace(:);
+    if ~isfield(plotCorrObj, 'curTrace')
+        seedTrace = A(curPos(2), curPos(1), :);
+        seedTrace = seedTrace(:);
+    else
+        seedTrace = plotCorrObj.curTrace;
+    end
+    
     sz  = size(A);
     imgall = reshape(A, sz(1)*sz(2), sz(3));
     
     %Calculate correlation matrix
-    if ~reg_flag
-        corrM = corr(imgall',seedTrace);
-    else
-        std_all = nanstd(imgall,0,2);
-        lowPixels = std_all <= prctile(std_all,1);
-        %avg_trace = nanmean(imgall,1);
-        avg_trace = nanmean(imgall(lowPixels,:),1);
-        corrM = partialcorr(imgall',seedTrace, avg_trace');
+    try
+        if ~reg_flag
+            corrM = corr(imgall',seedTrace);
+        else
+            std_all = nanstd(imgall,0,2);
+            lowPixels = std_all <= prctile(std_all,1);
+            %avg_trace = nanmean(imgall,1);
+            avg_trace = nanmean(imgall(lowPixels,:),1);
+            corrM = partialcorr(imgall',seedTrace, avg_trace');
+        end
+        corrM = reshape(corrM, sz(1:2));
+
+        %Plot the new correlation matrix
+        corrM = plotCorrelationMap(corrM, handles);
+    catch
+        msgbox('Make sure traces have the same duration!')
     end
-    corrM = reshape(corrM, sz(1:2));
-    
-    %Plot the new correlation matrix
-    corrM = plotCorrelationMap(corrM, handles);
 
     
     
