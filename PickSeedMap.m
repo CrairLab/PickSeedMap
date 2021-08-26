@@ -67,7 +67,7 @@ handles.Save_data.UserData.hand_Position = [];
 if ~isempty(findobj('Tag', 'Manuvent_threshold'))
     MC_h = findobj('Tag', 'Manuvent_threshold');
     MC_data = guidata(MC_h);
-    MC_passed = get(MC_data.output, 'UserData');
+    MC_passed = get(MC_data.Plot_correlation, 'UserData');
     plotCorrObj = MC_passed.plotCorrObj;
 
     %Get the current postition for the seed
@@ -364,7 +364,16 @@ try
     reg_flag = filename(20:21);
     curPos = handles.Load_maps.UserData.curPos;
     curFrame = handles.Frame.String;
-    saveas(handles.CorrMap, ['roi_', reg_flag, '_', curFrame, '_',...
+    
+    % Copy the obj to a new figure and save it
+    f2 = figure;
+    copyobj(handles.CorrMap, f2);
+    set(f2.CurrentAxes, 'Units', 'Normalized');
+    set(f2.CurrentAxes, 'OuterPosition', [0, 0, .95, .95]);
+    colormap(jet);
+    colorbar;
+    
+    saveas(f2, ['roi_', reg_flag, '_', curFrame, '_',...
         num2str(curPos(1)) '_',  num2str(curPos(2)),'.png'])  
     %avg_seed_corr = handles.Save_data.UserData.avg_seed_corr;
     %avg_rec_corr = handles.Save_data.UserData.avg_rec_corr;
